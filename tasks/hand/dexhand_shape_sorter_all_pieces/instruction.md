@@ -44,7 +44,8 @@ nominal values and no calibration error, so a plan that works in your simulator 
 
 - World frame: z up; the table top is the plane z = 0. Units are metres, radians, seconds, kilograms. The table is
   1.0 m × 0.8 m (centred at the origin) and there is nothing below it: a piece that leaves the table falls away and is
-  lost.
+  lost. In the images the table is a 4 mm desk pad (its top is z = 0) lying on the end of a conference table in an
+  office; the conference table and the office are scenery only, not part of the simulation.
 - **Cube** (public SuperDex `shape_box` prefab): body + lid, both static. Nominally the body frame origin (bottom
   centre) is at world (0.10, 0, 0) with no rotation. In every scene the cube is clamped at a fixed but unknown
   offset from that nominal placement: dx, dy ∈ [−4, 4] mm and a yaw (about +z through the body origin) in
@@ -80,10 +81,13 @@ nominal values and no calibration error, so a plan that works in your simulator 
 - **Cameras** `top`, `left`: 640×480 pinhole cameras, the same rig in every scene; `cameras.json` gives
   `fx, fy, cx, cy` and `world_from_camera` (4×4, OpenCV convention: x right, y down, z forward). A camera-frame point
   projects to u = fx·X/Z + cx, v = fy·Y/Z + cy; pixel (column i, row j) samples (u, v) = (i + 0.5, j + 0.5).
-  `<cam>_depth.png` is 16-bit depth along the camera z axis in units of 0.1 mm (0 = no return). Both images follow
+  `<cam>_depth.png` is 16-bit depth along the camera z axis in units of 0.1 mm. Every surface in view returns a depth,
+  the office's too; 0 (no return) only where nothing is seen within 6.5535 m, the 16-bit range. Both images follow
   this convention: the depth of pixel (i, j) is the depth of the surface point seen through (i + 0.5, j + 0.5)
-  (rendered without multisampling), and RGB is antialiased (4 samples per pixel, averaged). Noise: RGB σ = 2 (8-bit
-  units; values are then truncated to integers), depth σ = 2 mm + 0.2 % of the depth, independent per pixel.
+  (rendered without multisampling), and RGB is antialiased (4 samples per pixel, averaged: rendered at twice the
+  resolution, each pixel the mean of its 2 × 2 samples). The RGB images are rendered physically based (MuJoCo's
+  Filament renderer) under the office's ceiling lights and daylight. Noise: RGB σ = 2 (8-bit units; values are then
+  truncated to integers), depth σ = 2 mm + 0.2 % of the depth, independent per pixel.
   The images show the start state that the grader simulates, after its 0.5 s settle (rendered from a settle with
   the nominal physics; with a scene's hidden physics the settled piece positions differ by at most about 0.02 mm).
   The hand is not in the start images (it is in the calibration images, below).
@@ -135,11 +139,11 @@ the graded run of your plan. Estimating `dp` and `q_err` from these images is pa
   these waypoints in `World(start_state)` with a `"calibration"` entry reproduces the routine in your simulator for any
   error you want to test (`w.hand_link_poses()` gives every link's pose).
 - The images come from the same two cameras (`cameras.json`), with the same conventions (pixel centres, depth units,
-  0 = no return) and the same noise model as the start images, with fresh noise. They show only the table and the
-  hand: the cube and the pieces are left out of these images. The hand is drawn with the public Wuji render meshes
-  `/opt/superdex_assets/bots/hands/wuji_hand2_beta1/right/render/*.glb`: every link with a `renderModel` in the bot
-  file (`wuji_hand2_beta1_right.superdex_bot`; its `links` are in the same order as `w.hand_link_poses()`) is drawn
-  with that mesh at the link's pose. The meshes are glTF (y up), so a mesh vertex (x, y, z) is the link-frame point
+  0 = no return) and the same noise model as the start images, with fresh noise. They show the office, the desk pad
+  and the hand: the cube and the pieces are left out of these images. The hand is drawn with the public Wuji render
+  meshes `/opt/superdex_assets/bots/hands/wuji_hand2_beta1/right/render/*.glb`: every link with a `renderModel` in
+  the bot file (`wuji_hand2_beta1_right.superdex_bot`; its `links` are in the same order as `w.hand_link_poses()`) is
+  drawn with that mesh at the link's pose. The meshes are glTF (y up), so a mesh vertex (x, y, z) is the link-frame point
   (x, −z, y). The render meshes differ slightly (up to a few millimetres) from the collision shapes that the simulator
   uses.
 - The plan check (speed limits, workspace, wrist orientation and finger direction limits) applies to the poses you
@@ -234,10 +238,16 @@ stops and that scene scores 0.
 ## Simulator facts that matter for planning
 
 - SuperDex 1.0.0, double precision, single-threaded (`initialize(0)`), Backward Euler, 2 ms steps, 20 Newton
-  iterations. A run is deterministic: the same start state and plan give a bit-identical result, in any process.
-  Different start states diverge: a sub-millimetre change in where a piece starts can change the outcome. Even a
-  last-bit change of a waypoint number can: the grader feeds your numbers exactly as written in the JSON (as
-  Python floats) to `World.step_waypoint`, which normalises the quaternion itself, in a fresh process with one World.
+  iterations. A run is deterministic: the same start state and plan give a bit-identical result, in any process
+  and on any machine. The image pins the numerics for that: `OPENBLAS_CORETYPE=Haswell` and
+  `NPY_DISABLE_CPU_FEATURES="X86_V4 AVX512_ICL AVX512_SPR"` are set in its environment, because without them
+  OpenBLAS picks its kernels by CPU and the same plan can pass different pieces on different machines. Keep these
+  two settings when you simulate, or your local results may differ from the grader's. `python3 -m sorter.numerics`,
+  run from your home directory, compares the machine with the reference. The grader runs the same check first and
+  refuses to grade where it fails. Different start states diverge: a sub-millimetre change in where a piece starts
+  can change the outcome. Even a last-bit change of a waypoint number can: the grader feeds your numbers exactly as
+  written in the JSON (as Python floats) to `World.step_waypoint`, which normalises the quaternion itself, in a fresh
+  process with one World.
 - Speed on one core: about 1 s of wall time per simulated second when nothing touches anything, and about 4–10 s per
   simulated second while the fingers hold or push a piece. A full 180 s plan takes roughly 10–25 minutes on one core.
   The grader runs the four scenes in parallel on four cores.

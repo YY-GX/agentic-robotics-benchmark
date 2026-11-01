@@ -77,6 +77,11 @@ def _worker(args):
 
 def main():
     t0 = time.time()
+    # Refuse to grade on a machine whose numerics differ from the reference: its scores would not be comparable
+    # (sorter/numerics.py). Raising here makes the run a task error, never a score.
+    from sorter import numerics
+    numerics.check()
+    log("numerics match the reference (OpenBLAS Haswell kernels, NumPy X86_V3, box SDF, physics probe)")
     config = stage_config()
     anchor, meta = read_anchor()
     budget = float(config.get("grading_budget_s", 4800))

@@ -13,5 +13,14 @@ for entry in payload/* payload/.[!.]*; do
   # fixed, content-independent timestamps (no ordering signal)
   find "$HOME_DIR/$(basename "$entry")" -exec touch -h -d "2026-01-01 00:00:00" {} +
 done
+# the agent's images, fetched into the image at build time (image/assets.sha256, docs/task-assets.md)
+if [ -d /opt/task-assets/payload ]; then
+  cp -r /opt/task-assets/payload/. "$HOME_DIR/"
+  for entry in /opt/task-assets/payload/*; do
+    [ -e "$entry" ] || continue
+    chown -R "$AGENT_USER:$AGENT_USER" "$HOME_DIR/$(basename "$entry")"
+    find "$HOME_DIR/$(basename "$entry")" -exec touch -h -d "2026-01-01 00:00:00" {} +
+  done
+fi
 mkdir -p "$HOME_DIR/submission/plans"
 chown -R "$AGENT_USER:$AGENT_USER" "$HOME_DIR/submission"
